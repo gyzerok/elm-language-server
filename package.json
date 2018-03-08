@@ -1,0 +1,17 @@
+{
+  "name": "elm-language-server",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "compile": "tsc -watch -p ./"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@types/node": "^8.9.4",
+    "node-elm-compiler": "^4.5.0",
+    "typescript": "^2.7.2",
+    "vscode-languageserver": "^3.5.1"
+  }
+}
