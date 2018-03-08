@@ -1,6 +1,6 @@
 import * as LServer from 'vscode-languageserver';
 import * as cp from 'child_process';
-const elm = require('node-elm-compiler');
+const Compiler = require('node-elm-compiler');
 
 const connection = LServer.createConnection(
   new LServer.IPCMessageReader(process),
@@ -9,8 +9,16 @@ const connection = LServer.createConnection(
 
 const documents = new LServer.TextDocuments();
 documents.listen(connection);
+let rootUri: string;
 
-connection.onInitialize(() => {
+connection.onInitialize(params => {
+  if (!params.rootUri) {
+    connection.dispose();
+    throw 'fuck';
+  }
+
+  rootUri = params.rootUri;
+
   return {
     textDocumentSync: documents.syncKind,
     capabilities: {
@@ -57,8 +65,10 @@ connection.onDocumentFormatting(params => {
 });
 
 connection.onDidSaveTextDocument(params => {
-  elm
-    .compileToString([params.textDocument.uri.slice(7)], { report: 'json' })
+  // Because it starts with "file://"
+  const path = params.textDocument.uri.slice(7);
+
+  Compiler.compileToString(path, { report: 'json' })
     .then(() => {
       connection.sendDiagnostics({
         uri: params.textDocument.uri,
@@ -67,26 +77,38 @@ connection.onDidSaveTextDocument(params => {
     })
     .catch((err: Error) => {
       const issues = JSON.parse(err.message.split('\n')[1]);
-      const diagnostics = issues.map((issue: any) => {
-        return {
-          severity: LServer.DiagnosticSeverity.Error,
-          message: issue.details,
-          range: {
-            start: {
-              line: issue.region.start.line - 1,
-              character: issue.region.start.column - 1,
-            },
-            end: {
-              line: issue.region.end.line - 1,
-              character: issue.region.end.column - 1,
-            },
-          },
-        };
-      });
+      const byFile = issues.reduce((acc: any, issue: any) => {
+        if (acc[issue.file]) {
+          acc[issue.file].push(issue);
+        } else {
+          acc[issue.file] = [issue];
+        }
 
-      connection.sendDiagnostics({
-        uri: params.textDocument.uri,
-        diagnostics,
+        return acc;
+      }, {});
+
+      Object.keys(byFile).forEach((relativePath: string) => {
+        const diagnostics = byFile[relativePath].map((issue: any) => {
+          return {
+            severity: LServer.DiagnosticSeverity.Error,
+            message: issue.details,
+            range: {
+              start: {
+                line: issue.region.start.line - 1,
+                character: issue.region.start.column - 1,
+              },
+              end: {
+                line: issue.region.end.line - 1,
+                character: issue.region.end.column - 1,
+              },
+            },
+          };
+        });
+
+        connection.sendDiagnostics({
+          uri: rootUri + '/' + relativePath,
+          diagnostics,
+        });
       });
     });
 });
