@@ -9,16 +9,8 @@ const connection = LServer.createConnection(
 
 const documents = new LServer.TextDocuments();
 documents.listen(connection);
-let rootUri: string;
 
-connection.onInitialize(params => {
-  if (!params.rootUri) {
-    connection.dispose();
-    throw 'fuck';
-  }
-
-  rootUri = params.rootUri;
-
+connection.onInitialize(() => {
   return {
     textDocumentSync: documents.syncKind,
     capabilities: {
@@ -47,7 +39,7 @@ connection.onDocumentFormatting(params => {
     .then(formattedText => {
       return [LServer.TextEdit.replace(wholeDocument, formattedText)];
     })
-    .catch(err => {
+    .catch(_err => {
       // if ((<string>err.message).indexOf('SYNTAX PROBLEM') >= 0) {
       //   return new LServer.ResponseError(
       //     LServer.ErrorCodes.ParseError,
@@ -87,8 +79,8 @@ connection.onDidSaveTextDocument(params => {
         return acc;
       }, {});
 
-      Object.keys(byFile).forEach((relativePath: string) => {
-        const diagnostics = byFile[relativePath].map((issue: any) => {
+      Object.keys(byFile).forEach((file: string) => {
+        const diagnostics = byFile[file].map((issue: any) => {
           return {
             severity: LServer.DiagnosticSeverity.Error,
             message: issue.details,
@@ -106,7 +98,7 @@ connection.onDidSaveTextDocument(params => {
         });
 
         connection.sendDiagnostics({
-          uri: rootUri + '/' + relativePath,
+          uri: 'file://' + file,
           diagnostics,
         });
       });
